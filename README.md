@@ -2,10 +2,12 @@
 <!-- slug: spinach-detector -->
 <!-- title: Spinach Detector -->
 <!-- description: Real-time object detection system for identifying spinach (bayam) using YOLO models -->
-<!-- image: https://github.com/user-attachments/assets/108a0dcd-3857-4489-a3d6-5954f5f42816 -->
+<!-- image: https://github.com/user-attachments/assets/9942fdd6-3665-4982-b59a-86ec199a0054 -->
 <!-- tags: python, flask, react, vite -->
 
 # 🥬 Spinach Detector AI
+
+<img width="1383" height="899" alt="image" src="https://github.com/user-attachments/assets/9942fdd6-3665-4982-b59a-86ec199a0054" />
 
 Real-time object detection system for identifying spinach (bayam) using **YOLO** (You Only Look Once) deep learning models. Built with **React** (Frontend) and **Flask** (Backend) for seamless real-time detection with visual bounding boxes and confidence scores.
 
