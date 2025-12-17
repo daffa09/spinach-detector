@@ -2,7 +2,7 @@ name: Build and Push Docker Images
 
 on:
   push:
-    branches: [ master ]
+    branches: [ archive ]
   workflow_dispatch:
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            daffa09/spinach-api:1.0.10
+            daffa09/spinach-api:1.0.11
           no-cache: true
 
       # ================= FRONTEND =================
@@ -38,6 +38,6 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           tags: |
-            daffa09/spinach-ui:1.0.10
+            daffa09/spinach-ui:1.0.11
           cache-from: type=registry,ref=daffa09/spinach-ui:buildcache
           cache-to: type=registry,ref=daffa09/spinach-ui:buildcache,mode=max

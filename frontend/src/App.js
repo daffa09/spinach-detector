@@ -16,9 +16,14 @@ export default function App() {
   const [facingMode, setFacingMode] = useState("environment"); // "user" for front, "environment" for back
 
   useEffect(() => {
+    startCamera();
+  }, [facingMode]);
+
+  const startCamera = () => {
     // Stop existing stream if any
     if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks();
+      const stream = videoRef.current.srcObject;
+      const tracks = stream.getTracks();
       tracks.forEach(track => track.stop());
     }
 
@@ -43,38 +48,104 @@ export default function App() {
         };
       })
       .catch(() => alert("Camera access denied"));
-  }, [facingMode]);
+  };
+
+  const switchCamera = () => {
+    setFacingMode(prev => prev === "user" ? "environment" : "user");
+  };
 
   // Draw bounding boxes on overlay canvas - YOLO style
   const drawBoundingBoxes = (detectionData) => {
-  const canvas = overlayCanvasRef.current;
-  const ctx = canvas.getContext("2d");
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (!detectionData || detectionData.length === 0) return;
-
-  detectionData.forEach((det) => {
-    const { x, y, width, height } = det.bbox_normalized;
-
-    const px = x * canvas.width;
-    const py = y * canvas.height;
-    const pw = width * canvas.width;
-    const ph = height * canvas.height;
-
-    ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(px, py, pw, ph);
-
-    ctx.fillStyle = "#10b981";
-    ctx.font = "bold 16px Inter";
-    ctx.fillText(
-      `bayam ${det.confidence.toFixed(1)}%`,
-      px,
-      py > 20 ? py - 6 : py + 18
-    );
-  });
-};
-
+    const canvas = overlayCanvasRef.current;
+    const ctx = canvas.getContext("2d");
+    
+    // Clear previous drawings
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (!detectionData || detectionData.length === 0) return;
+    
+    detectionData.forEach((detection) => {
+      const x = detection.x * canvas.width;
+      const y = detection.y * canvas.height;
+      const width = detection.width * canvas.width;
+      const height = detection.height * canvas.height;
+      
+      // Box color - bright green
+      const boxColor = "#10b981";
+      
+      // Draw main bounding box with thick border
+      ctx.strokeStyle = boxColor;
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 0;
+      ctx.strokeRect(x, y, width, height);
+      
+      // Prepare label text
+      const label = `bayam`;
+      const confidenceText = `${detection.confidence.toFixed(1)}%`;
+      
+      // Configure text style for measuring
+      ctx.font = "bold 18px Inter, sans-serif";
+      const labelWidth = ctx.measureText(label).width;
+      ctx.font = "600 14px Inter, sans-serif";
+      const confWidth = ctx.measureText(confidenceText).width;
+      
+      const textPadding = 8;
+      const labelHeight = 28;
+      const boxWidth = Math.max(labelWidth, confWidth) + textPadding * 2 + 4;
+      
+      // Draw label background (filled rectangle above the box)
+      ctx.fillStyle = boxColor;
+      ctx.fillRect(
+        x - 2, 
+        y - labelHeight - 8, 
+        boxWidth, 
+        labelHeight + 4
+      );
+      
+      // Draw label text (class name)
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 18px Inter, sans-serif";
+      ctx.fillText(label, x + textPadding, y - labelHeight + 12);
+      
+      // Draw confidence text below label
+      ctx.font = "600 14px Inter, sans-serif";
+      ctx.fillText(confidenceText, x + textPadding, y - 8);
+      
+      // Draw corner brackets for professional YOLO look
+      const cornerLength = 20;
+      ctx.strokeStyle = boxColor;
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      
+      // Top-left corner
+      ctx.beginPath();
+      ctx.moveTo(x, y + cornerLength);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + cornerLength, y);
+      ctx.stroke();
+      
+      // Top-right corner
+      ctx.beginPath();
+      ctx.moveTo(x + width - cornerLength, y);
+      ctx.lineTo(x + width, y);
+      ctx.lineTo(x + width, y + cornerLength);
+      ctx.stroke();
+      
+      // Bottom-left corner
+      ctx.beginPath();
+      ctx.moveTo(x, y + height - cornerLength);
+      ctx.lineTo(x, y + height);
+      ctx.lineTo(x + cornerLength, y + height);
+      ctx.stroke();
+      
+      // Bottom-right corner
+      ctx.beginPath();
+      ctx.moveTo(x + width - cornerLength, y + height);
+      ctx.lineTo(x + width, y + height);
+      ctx.lineTo(x + width, y + height - cornerLength);
+      ctx.stroke();
+    });
+  };
 
   const captureAndDetect = async () => {
     const video = videoRef.current;
@@ -92,8 +163,7 @@ export default function App() {
     formData.append("model", model);
 
     try {
-      // const res = await axios.post("http://localhost:5005/predict", formData); //local
-      const res = await axios.post("https://is.api.daffathan-labs.my.id/predict", formData); // server
+      const res = await axios.post("http://localhost:5000/predict", formData);
 
       setStatus(res.data.is_bayam ? "✅ Bayam Detected" : "🔍 Scanning...");
       setConfidence(res.data.confidence);
@@ -123,10 +193,6 @@ export default function App() {
     // Clear bounding boxes
     const ctx = overlayCanvasRef.current.getContext("2d");
     ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height);
-  };
-
-  const switchCamera = () => {
-    setFacingMode(prevMode => prevMode === "user" ? "environment" : "user");
   };
 
   return (
@@ -186,12 +252,11 @@ export default function App() {
 
             <button 
               onClick={switchCamera} 
-              style={styles.buttonSwitch}
+              style={styles.buttonCamera}
               disabled={running}
-              title="Switch Camera"
             >
               <span style={styles.buttonIcon}>🔄</span>
-              Switch Camera
+              {facingMode === "user" ? "Kamera Depan" : "Kamera Belakang"}
             </button>
 
             {!running ? (
@@ -245,7 +310,6 @@ const styles = {
     gap: "2rem",
     position: "relative",
     zIndex: 1,
-    background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
   },
   header: {
     textAlign: "center",
@@ -263,6 +327,10 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     gap: "1rem",
+  },
+  icon: {
+    fontSize: "3.5rem",
+    filter: "drop-shadow(0 0 20px rgba(16, 185, 129, 0.5))",
   },
   subtitle: {
     fontSize: "1.125rem",
@@ -341,15 +409,15 @@ const styles = {
   labelText: {
     fontSize: "0.95rem",
     fontWeight: "600",
-    color: "#e2e8f0",
+    color: "#ffffff",
   },
   select: {
     flex: 1,
     padding: "0.75rem 1rem",
     borderRadius: "12px",
     border: "2px solid rgba(255, 255, 255, 0.1)",
-    background: "rgba(15, 23, 42, 0.6)",
-    color: "#e2e8f0",
+    background: "rgba(30, 30, 30, 0.8)",
+    color: "#ffffff",
     fontSize: "0.95rem",
     fontWeight: "500",
     cursor: "pointer",
@@ -386,20 +454,20 @@ const styles = {
     gap: "0.5rem",
     boxShadow: "0 4px 20px rgba(239, 68, 68, 0.4)",
   },
-  buttonSwitch: {
+  buttonCamera: {
     padding: "0.875rem 1.5rem",
     borderRadius: "12px",
-    border: "none",
-    background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+    border: "2px solid rgba(255, 255, 255, 0.2)",
+    background: "rgba(30, 30, 30, 0.8)",
     color: "#ffffff",
-    fontSize: "1rem",
-    fontWeight: "700",
+    fontSize: "0.95rem",
+    fontWeight: "600",
     cursor: "pointer",
     transition: "all 0.3s ease",
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
-    boxShadow: "0 4px 20px rgba(59, 130, 246, 0.4)",
+    backdropFilter: "blur(10px)",
   },
   buttonIcon: {
     fontSize: "1.125rem",
