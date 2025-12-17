@@ -9,6 +9,8 @@ services:
     networks:
       - spinach-network
     restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
     healthcheck:
       interval: 30s
       timeout: 10s
