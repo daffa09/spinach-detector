@@ -13,10 +13,23 @@ export default function App() {
   const [confidence, setConfidence] = useState(null);
   const [running, setRunning] = useState(false);
   const [detections, setDetections] = useState([]);
+  const [facingMode, setFacingMode] = useState("environment"); // "user" for front, "environment" for back
 
   useEffect(() => {
+    // Stop existing stream if any
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = videoRef.current.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+    }
+
     navigator.mediaDevices
-      .getUserMedia({ video: { width: 1280, height: 720 } })
+      .getUserMedia({ 
+        video: { 
+          width: 1280, 
+          height: 720,
+          facingMode: facingMode 
+        } 
+      })
       .then((stream) => {
         videoRef.current.srcObject = stream;
         // Wait for video to load metadata
@@ -30,7 +43,7 @@ export default function App() {
         };
       })
       .catch(() => alert("Camera access denied"));
-  }, []);
+  }, [facingMode]);
 
   // Draw bounding boxes on overlay canvas - YOLO style
   const drawBoundingBoxes = (detectionData) => {
@@ -174,11 +187,14 @@ export default function App() {
     ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height);
   };
 
+  const switchCamera = () => {
+    setFacingMode(prevMode => prevMode === "user" ? "environment" : "user");
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.header} className="fade-in">
         <h1 style={styles.title}>
-          <span style={styles.icon}>🥬</span>
           Spinach Detector AI
         </h1>
         <p style={styles.subtitle}>Real-time Object Detection with YOLO</p>
@@ -230,6 +246,16 @@ export default function App() {
               </select>
             </label>
 
+            <button 
+              onClick={switchCamera} 
+              style={styles.buttonSwitch}
+              disabled={running}
+              title="Switch Camera"
+            >
+              <span style={styles.buttonIcon}>🔄</span>
+              Switch Camera
+            </button>
+
             {!running ? (
               <button onClick={startDetection} style={styles.buttonStart}>
                 <span style={styles.buttonIcon}>▶</span>
@@ -244,7 +270,7 @@ export default function App() {
           </div>
 
           {confidence !== null && (
-            <div style={styles.statsCard} className="glass">
+            <div style={styles.statsCard} className="glass flex flex-col md:flex-row gap-2">
               <div style={styles.statItem}>
                 <span style={styles.statLabel}>Max Confidence</span>
                 <span style={styles.statValue}>{confidence}%</span>
@@ -281,6 +307,7 @@ const styles = {
     gap: "2rem",
     position: "relative",
     zIndex: 1,
+    background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
   },
   header: {
     textAlign: "center",
@@ -298,10 +325,6 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     gap: "1rem",
-  },
-  icon: {
-    fontSize: "3.5rem",
-    filter: "drop-shadow(0 0 20px rgba(16, 185, 129, 0.5))",
   },
   subtitle: {
     fontSize: "1.125rem",
@@ -380,15 +403,15 @@ const styles = {
   labelText: {
     fontSize: "0.95rem",
     fontWeight: "600",
-    color: "black",
+    color: "#e2e8f0",
   },
   select: {
     flex: 1,
     padding: "0.75rem 1rem",
     borderRadius: "12px",
     border: "2px solid rgba(255, 255, 255, 0.1)",
-    background: "rgba(255, 255, 255, 0.05)",
-    color: "black",
+    background: "rgba(15, 23, 42, 0.6)",
+    color: "#e2e8f0",
     fontSize: "0.95rem",
     fontWeight: "500",
     cursor: "pointer",
@@ -424,6 +447,21 @@ const styles = {
     alignItems: "center",
     gap: "0.5rem",
     boxShadow: "0 4px 20px rgba(239, 68, 68, 0.4)",
+  },
+  buttonSwitch: {
+    padding: "0.875rem 1.5rem",
+    borderRadius: "12px",
+    border: "none",
+    background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+    color: "#ffffff",
+    fontSize: "1rem",
+    fontWeight: "700",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    boxShadow: "0 4px 20px rgba(59, 130, 246, 0.4)",
   },
   buttonIcon: {
     fontSize: "1.125rem",
