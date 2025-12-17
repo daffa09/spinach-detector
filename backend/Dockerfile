@@ -1,5 +1,5 @@
 # Multi-stage build to reduce final image size
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ COPY --from=builder /root/.local /root/.local
 
 # Copy only necessary application files
 COPY main.py .
-COPY models/*.onnx models/ 2>/dev/null || true
+COPY models/ models/
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
