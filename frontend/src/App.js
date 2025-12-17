@@ -92,8 +92,8 @@ export default function App() {
     formData.append("model", model);
 
     try {
-      const res = await axios.post("http://localhost:5005/predict", formData); //local
-      // const res = await axios.post("https://is.api.daffathan-labs.my.id/predict", formData); // server
+      // const res = await axios.post("http://localhost:5005/predict", formData); //local
+      const res = await axios.post("https://is.api.daffathan-labs.my.id/predict", formData); // server
 
       setStatus(res.data.is_bayam ? "✅ Bayam Detected" : "🔍 Scanning...");
       setConfidence(res.data.confidence);
