@@ -1,46 +1,22 @@
-# Version control
-.git
-.gitignore
-
-# Python
-__pycache__
+# Docker ignore for ONNX build
+venv/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.so
-*.egg
-*.egg-info
-dist
-build
-venv/
-env/
-ENV/
-
-# Model files (keep only ONNX in the image)
 *.pt
-*.pth
-*.weights
-
-# Development & testing
-*.ipynb
-.pytest_cache
-.coverage
-htmlcov
-runs/
-datasets/
-
-# Environment files
+*.egg-info/
+dist/
+build/
 .env
-.env.*
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-
-# Misc
+.venv
+.git/
+.gitignore
+README.md
+ONNX_MIGRATION.md
+convert_to_onnx.py
+.dockerignore
 *.log
 .DS_Store
 Thumbs.db
