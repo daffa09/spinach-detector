@@ -1,34 +1,17 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from ultralytics import YOLO
 from PIL import Image
-import onnxruntime as ort
-import numpy as np
 import io
+import os
 
 app = Flask(__name__)
 CORS(app)
 
 MODELS = {
-    "yolo9": "models/yolo9.onnx",
-    "yolo11": "models/yolo11.onnx",
+    "yolo9": YOLO("models/yolo9.pt"),
+    "yolo11": YOLO("models/yolo11.pt"),
 }
-
-SESSIONS = {}
-
-def load_models():
-    for name, path in MODELS.items():
-        SESSIONS[name] = ort.InferenceSession(
-            path,
-            providers=["CPUExecutionProvider"]
-        )
-
-load_models()
-
-def preprocess(image):
-    image = image.resize((640, 640))
-    img = np.array(image).astype(np.float32) / 255.0
-    img = np.transpose(img, (2, 0, 1))
-    return np.expand_dims(img, axis=0)
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -36,49 +19,50 @@ def predict():
         return jsonify({"error": "No image uploaded"}), 400
 
     model_name = request.form.get("model")
-    if model_name not in SESSIONS:
+    if model_name not in MODELS:
         return jsonify({"error": "Invalid model"}), 400
 
-    image = Image.open(
-        io.BytesIO(request.files["image"].read())
-    ).convert("RGB")
+    image_file = request.files["image"]
+    img = Image.open(io.BytesIO(image_file.read())).convert("RGB")
 
-    input_tensor = preprocess(image)
-    session = SESSIONS[model_name]
+    model = MODELS[model_name]
+    results = model(img)
 
-    input_name = session.get_inputs()[0].name
-    output_name = session.get_outputs()[0].name
-
-    outputs = session.run([output_name], {input_name: input_tensor})
-
-    detections = []
     detected = False
     confidence = 0.0
+    detections = []
 
-    for det in outputs[0][0]:
-        conf = float(det[4])
-        cls = int(det[5])
-
-        # asumsi class bayam = 0
-        if cls == 0 and conf > 0.4:
-            detected = True
-            confidence = max(confidence, conf)
-
-            x, y, w, h = det[:4]
-            detections.append({
-                "x": float(x),
-                "y": float(y),
-                "width": float(w),
-                "height": float(h),
-                "confidence": round(conf * 100, 2),
-            })
+    for r in results:
+        img_width, img_height = img.size
+        for box in r.boxes:
+            cls = int(box.cls[0])
+            conf = float(box.conf[0])
+            if model.names[cls].lower() == "bayam":
+                detected = True
+                confidence = max(confidence, conf)
+                
+                # Get bounding box coordinates in xyxy format
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                
+                # Convert to x, y, width, height format (normalized 0-1)
+                x = x1 / img_width
+                y = y1 / img_height
+                width = (x2 - x1) / img_width
+                height = (y2 - y1) / img_height
+                
+                detections.append({
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                    "confidence": round(conf * 100, 2)
+                })
 
     return jsonify({
-        "model": model_name,
         "is_bayam": detected,
         "confidence": round(confidence * 100, 2),
         "detections": detections
     })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5005)
+    app.run(host="0.0.0.0", port=5005, debug=False)

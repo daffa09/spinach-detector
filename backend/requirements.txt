@@ -1,7 +1,6 @@
 flask==3.0.3
 flask-cors==4.0.1
 python-dotenv==1.0.0
-onnxruntime==1.16.0
-numpy
+ultralytics
 pillow
 httpx==0.24.1
