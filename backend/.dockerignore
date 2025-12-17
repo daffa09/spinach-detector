@@ -1,0 +1,46 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+venv/
+env/
+ENV/
+
+# Model files (keep only ONNX in the image)
+*.pt
+*.pth
+*.weights
+
+# Development & testing
+*.ipynb
+.pytest_cache
+.coverage
+htmlcov
+runs/
+datasets/
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db

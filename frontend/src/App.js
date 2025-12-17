@@ -141,7 +141,8 @@ export default function App() {
     formData.append("model", model);
 
     try {
-      const res = await axios.post("http://localhost:5000/predict", formData);
+      // const res = await axios.post("http://localhost:5000/predict", formData); //local
+      const res = await axios.post("http://141.11.190.106:60000/predict", formData); // server
 
       setStatus(res.data.is_bayam ? "✅ Bayam Detected" : "🔍 Scanning...");
       setConfidence(res.data.confidence);
