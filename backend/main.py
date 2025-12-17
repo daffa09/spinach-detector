@@ -9,78 +9,136 @@ app = Flask(__name__)
 CORS(app)
 
 # =====================
-# Load ONNX Models
+# CONFIG
 # =====================
+IMG_SIZE = 640
+CONF_THRESHOLD = 0.25
+IOU_THRESHOLD = 0.45
+CLASS_NAMES = {0: "bayam"}
+
 MODELS = {
     "yolo9": ort.InferenceSession("models/yolo9.onnx", providers=["CPUExecutionProvider"]),
     "yolo11": ort.InferenceSession("models/yolo11.onnx", providers=["CPUExecutionProvider"]),
 }
 
-CLASS_NAMES = {0: "bayam"}
-IMG_SIZE = 640
-CONF_THRESHOLD = 0.4
+# =====================
+# LETTERBOX
+# =====================
+def letterbox(image, new_size=640):
+    w, h = image.size
+    scale = min(new_size / w, new_size / h)
+
+    nw, nh = int(w * scale), int(h * scale)
+    image_resized = image.resize((nw, nh))
+
+    new_image = Image.new("RGB", (new_size, new_size), (114, 114, 114))
+    pad_x = (new_size - nw) // 2
+    pad_y = (new_size - nh) // 2
+
+    new_image.paste(image_resized, (pad_x, pad_y))
+
+    return new_image, scale, pad_x, pad_y
 
 
 # =====================
-# Preprocess
+# PREPROCESS
 # =====================
-def preprocess(image: Image.Image):
-    image = image.resize((IMG_SIZE, IMG_SIZE))
-    img = np.array(image).astype(np.float32) / 255.0  # RGB [0,1]
-    img = np.transpose(img, (2, 0, 1))  # HWC → CHW
-    img = np.expand_dims(img, axis=0)   # BCHW
+def preprocess(image):
+    img = np.array(image).astype(np.float32) / 255.0
+    img = np.transpose(img, (2, 0, 1))
+    img = np.expand_dims(img, 0)
     return img
 
 
 # =====================
-# Postprocess
+# NMS
 # =====================
-def postprocess(outputs, orig_w, orig_h):
-    preds = outputs[0][0]  # shape: (num_boxes, 5 + num_classes)
-    detections = []
+def nms(boxes, scores, iou_thr):
+    idxs = scores.argsort()[::-1]
+    keep = []
+
+    while idxs.size > 0:
+        i = idxs[0]
+        keep.append(i)
+        if idxs.size == 1:
+            break
+
+        rest = idxs[1:]
+        xx1 = np.maximum(boxes[i, 0], boxes[rest, 0])
+        yy1 = np.maximum(boxes[i, 1], boxes[rest, 1])
+        xx2 = np.minimum(boxes[i, 2], boxes[rest, 2])
+        yy2 = np.minimum(boxes[i, 3], boxes[rest, 3])
+
+        w = np.maximum(0, xx2 - xx1)
+        h = np.maximum(0, yy2 - yy1)
+        inter = w * h
+
+        area_i = (boxes[i, 2] - boxes[i, 0]) * (boxes[i, 3] - boxes[i, 1])
+        area_r = (boxes[rest, 2] - boxes[rest, 0]) * (boxes[rest, 3] - boxes[rest, 1])
+
+        iou = inter / (area_i + area_r - inter + 1e-6)
+        idxs = rest[iou < iou_thr]
+
+    return keep
+
+
+# =====================
+# POSTPROCESS
+# =====================
+def postprocess(outputs, scale, pad_x, pad_y, orig_w, orig_h):
+    preds = np.squeeze(outputs[0], axis=0)
+
+    boxes, scores = [], []
 
     for p in preds:
-        obj_conf = p[4]
-        class_scores = p[5:]
+        x, y, w, h = p[:4]
+        obj = p[4]
+        cls_conf = p[5]
 
-        class_id = int(np.argmax(class_scores))
-        class_conf = class_scores[class_id]
-        conf = obj_conf * class_conf
-
-        if conf < CONF_THRESHOLD or class_id != 0:
+        conf = obj * cls_conf
+        if conf < CONF_THRESHOLD:
             continue
 
-        x_center, y_center, w, h = p[:4]
+        x1 = x - w / 2
+        y1 = y - h / 2
+        x2 = x + w / 2
+        y2 = y + h / 2
 
-        # Convert from model coords (640x640) to normalized coords (0-1)
-        x1_norm = (x_center - w / 2) / IMG_SIZE
-        y1_norm = (y_center - h / 2) / IMG_SIZE
-        w_norm = w / IMG_SIZE
-        h_norm = h / IMG_SIZE
+        boxes.append([x1, y1, x2, y2])
+        scores.append(conf)
 
-        # Convert to pixel coordinates based on original image size
-        x1_px = int(x1_norm * orig_w)
-        y1_px = int(y1_norm * orig_h)
-        w_px = int(w_norm * orig_w)
-        h_px = int(h_norm * orig_h)
+    if not boxes:
+        return []
+
+    boxes = np.array(boxes)
+    scores = np.array(scores)
+
+    keep = nms(boxes, scores, IOU_THRESHOLD)
+
+    detections = []
+    for i in keep:
+        x1, y1, x2, y2 = boxes[i]
+
+        # Remove padding & scale back
+        x1 = (x1 - pad_x) / scale
+        y1 = (y1 - pad_y) / scale
+        x2 = (x2 - pad_x) / scale
+        y2 = (y2 - pad_y) / scale
+
+        # Normalize
+        x1n = max(0, x1 / orig_w)
+        y1n = max(0, y1 / orig_h)
+        wn = (x2 - x1) / orig_w
+        hn = (y2 - y1) / orig_h
 
         detections.append({
             "class": "bayam",
-            "class_id": 0,
-            "confidence": round(float(conf * 100), 2),
-            # Normalized coordinates (0-1) for responsive use
+            "confidence": round(float(scores[i] * 100), 2),
             "bbox_normalized": {
-                "x": float(x1_norm),
-                "y": float(y1_norm),
-                "width": float(w_norm),
-                "height": float(h_norm)
-            },
-            # Pixel coordinates for direct canvas drawing
-            "bbox_pixels": {
-                "x": x1_px,
-                "y": y1_px,
-                "width": w_px,
-                "height": h_px
+                "x": float(x1n),
+                "y": float(y1n),
+                "width": float(wn),
+                "height": float(hn),
             }
         })
 
@@ -88,40 +146,33 @@ def postprocess(outputs, orig_w, orig_h):
 
 
 # =====================
-# API Endpoint
+# API
 # =====================
 @app.route("/predict", methods=["POST"])
 def predict():
     if "image" not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
+        return jsonify({"error": "No image"}), 400
 
     model_name = request.form.get("model", "yolo11")
-    if model_name not in MODELS:
-        return jsonify({"error": "Invalid model"}), 400
+    session = MODELS[model_name]
 
     img = Image.open(io.BytesIO(request.files["image"].read())).convert("RGB")
     orig_w, orig_h = img.size
-    
-    input_tensor = preprocess(img)
 
-    session = MODELS[model_name]
-    input_name = session.get_inputs()[0].name
-    outputs = session.run(None, {input_name: input_tensor})
+    img_lb, scale, pad_x, pad_y = letterbox(img)
+    input_tensor = preprocess(img_lb)
 
-    detections = postprocess(outputs, orig_w, orig_h)
+    outputs = session.run(None, {session.get_inputs()[0].name: input_tensor})
+    detections = postprocess(outputs, scale, pad_x, pad_y, orig_w, orig_h)
 
     return jsonify({
         "model": model_name,
-        "is_bayam": len(detections) > 0,
         "count": len(detections),
-        "confidence": max([d["confidence"] for d in detections], default=0.0),
-        "image_size": {
-            "width": orig_w,
-            "height": orig_h
-        },
+        "is_bayam": len(detections) > 0,
+        "confidence": max([d["confidence"] for d in detections], default=0),
         "detections": detections
     })
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5005)
+    app.run(host="0.0.0.0", port=5005, debug=True)

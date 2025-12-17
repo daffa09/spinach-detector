@@ -47,96 +47,34 @@ export default function App() {
 
   // Draw bounding boxes on overlay canvas - YOLO style
   const drawBoundingBoxes = (detectionData) => {
-    const canvas = overlayCanvasRef.current;
-    const ctx = canvas.getContext("2d");
-    
-    // Clear previous drawings
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    if (!detectionData || detectionData.length === 0) return;
-    
-    detectionData.forEach((detection) => {
-      const x = detection.x * canvas.width;
-      const y = detection.y * canvas.height;
-      const width = detection.width * canvas.width;
-      const height = detection.height * canvas.height;
-      
-      // Box color - bright green
-      const boxColor = "#10b981";
-      
-      // Draw main bounding box with thick border
-      ctx.strokeStyle = boxColor;
-      ctx.lineWidth = 4;
-      ctx.shadowBlur = 0;
-      ctx.strokeRect(x, y, width, height);
-      
-      // Prepare label text
-      const label = `bayam`;
-      const confidenceText = `${detection.confidence.toFixed(1)}%`;
-      
-      // Configure text style for measuring
-      ctx.font = "bold 18px Inter, sans-serif";
-      const labelWidth = ctx.measureText(label).width;
-      ctx.font = "600 14px Inter, sans-serif";
-      const confWidth = ctx.measureText(confidenceText).width;
-      
-      const textPadding = 8;
-      const labelHeight = 28;
-      const boxWidth = Math.max(labelWidth, confWidth) + textPadding * 2 + 4;
-      
-      // Draw label background (filled rectangle above the box)
-      ctx.fillStyle = boxColor;
-      ctx.fillRect(
-        x - 2, 
-        y - labelHeight - 8, 
-        boxWidth, 
-        labelHeight + 4
-      );
-      
-      // Draw label text (class name)
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = "bold 18px Inter, sans-serif";
-      ctx.fillText(label, x + textPadding, y - labelHeight + 12);
-      
-      // Draw confidence text below label
-      ctx.font = "600 14px Inter, sans-serif";
-      ctx.fillText(confidenceText, x + textPadding, y - 8);
-      
-      // Draw corner brackets for professional YOLO look
-      const cornerLength = 20;
-      ctx.strokeStyle = boxColor;
-      ctx.lineWidth = 5;
-      ctx.lineCap = "round";
-      
-      // Top-left corner
-      ctx.beginPath();
-      ctx.moveTo(x, y + cornerLength);
-      ctx.lineTo(x, y);
-      ctx.lineTo(x + cornerLength, y);
-      ctx.stroke();
-      
-      // Top-right corner
-      ctx.beginPath();
-      ctx.moveTo(x + width - cornerLength, y);
-      ctx.lineTo(x + width, y);
-      ctx.lineTo(x + width, y + cornerLength);
-      ctx.stroke();
-      
-      // Bottom-left corner
-      ctx.beginPath();
-      ctx.moveTo(x, y + height - cornerLength);
-      ctx.lineTo(x, y + height);
-      ctx.lineTo(x + cornerLength, y + height);
-      ctx.stroke();
-      
-      // Bottom-right corner
-      ctx.beginPath();
-      ctx.moveTo(x + width - cornerLength, y + height);
-      ctx.lineTo(x + width, y + height);
-      ctx.lineTo(x + width, y + height - cornerLength);
-      ctx.stroke();
-    });
-  };
+  const canvas = overlayCanvasRef.current;
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!detectionData || detectionData.length === 0) return;
+
+  detectionData.forEach((det) => {
+    const { x, y, width, height } = det.bbox_normalized;
+
+    const px = x * canvas.width;
+    const py = y * canvas.height;
+    const pw = width * canvas.width;
+    const ph = height * canvas.height;
+
+    ctx.strokeStyle = "#10b981";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(px, py, pw, ph);
+
+    ctx.fillStyle = "#10b981";
+    ctx.font = "bold 16px Inter";
+    ctx.fillText(
+      `bayam ${det.confidence.toFixed(1)}%`,
+      px,
+      py > 20 ? py - 6 : py + 18
+    );
+  });
+};
+
 
   const captureAndDetect = async () => {
     const video = videoRef.current;
@@ -154,8 +92,8 @@ export default function App() {
     formData.append("model", model);
 
     try {
-      // const res = await axios.post("http://localhost:5000/predict", formData); //local
-      const res = await axios.post("https://is.api.daffathan-labs.my.id/predict", formData); // server
+      const res = await axios.post("http://localhost:5005/predict", formData); //local
+      // const res = await axios.post("https://is.api.daffathan-labs.my.id/predict", formData); // server
 
       setStatus(res.data.is_bayam ? "✅ Bayam Detected" : "🔍 Scanning...");
       setConfidence(res.data.confidence);
