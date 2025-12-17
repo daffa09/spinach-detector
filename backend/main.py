@@ -50,20 +50,38 @@ def postprocess(outputs, orig_w, orig_h):
         if conf < CONF_THRESHOLD or class_id != 0:
             continue
 
-        x, y, w, h = p[:4]
+        x_center, y_center, w, h = p[:4]
 
-        # Convert to normalized xywh (0–1)
-        x1 = (x - w / 2) / IMG_SIZE
-        y1 = (y - h / 2) / IMG_SIZE
-        w /= IMG_SIZE
-        h /= IMG_SIZE
+        # Convert from model coords (640x640) to normalized coords (0-1)
+        x1_norm = (x_center - w / 2) / IMG_SIZE
+        y1_norm = (y_center - h / 2) / IMG_SIZE
+        w_norm = w / IMG_SIZE
+        h_norm = h / IMG_SIZE
+
+        # Convert to pixel coordinates based on original image size
+        x1_px = int(x1_norm * orig_w)
+        y1_px = int(y1_norm * orig_h)
+        w_px = int(w_norm * orig_w)
+        h_px = int(h_norm * orig_h)
 
         detections.append({
-            "x": float(x1),
-            "y": float(y1),
-            "width": float(w),
-            "height": float(h),
-            "confidence": round(float(conf * 100), 2)
+            "class": "bayam",
+            "class_id": 0,
+            "confidence": round(float(conf * 100), 2),
+            # Normalized coordinates (0-1) for responsive use
+            "bbox_normalized": {
+                "x": float(x1_norm),
+                "y": float(y1_norm),
+                "width": float(w_norm),
+                "height": float(h_norm)
+            },
+            # Pixel coordinates for direct canvas drawing
+            "bbox_pixels": {
+                "x": x1_px,
+                "y": y1_px,
+                "width": w_px,
+                "height": h_px
+            }
         })
 
     return detections
@@ -82,18 +100,25 @@ def predict():
         return jsonify({"error": "Invalid model"}), 400
 
     img = Image.open(io.BytesIO(request.files["image"].read())).convert("RGB")
+    orig_w, orig_h = img.size
+    
     input_tensor = preprocess(img)
 
     session = MODELS[model_name]
     input_name = session.get_inputs()[0].name
     outputs = session.run(None, {input_name: input_tensor})
 
-    detections = postprocess(outputs, *img.size)
+    detections = postprocess(outputs, orig_w, orig_h)
 
     return jsonify({
         "model": model_name,
         "is_bayam": len(detections) > 0,
+        "count": len(detections),
         "confidence": max([d["confidence"] for d in detections], default=0.0),
+        "image_size": {
+            "width": orig_w,
+            "height": orig_h
+        },
         "detections": detections
     })
 

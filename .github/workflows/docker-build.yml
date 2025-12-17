@@ -27,7 +27,7 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            daffa09/spinach-api:1.0.7
+            daffa09/spinach-api:1.0.8
           no-cache: true
 
       # ================= FRONTEND =================
